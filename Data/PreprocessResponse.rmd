@@ -1,0 +1,386 @@
+
+```{r}
+setwd("~/Desktop/Google Drive/materials/job/embrace home loan/responseProject")
+```
+
+```{r}
+df = read.csv2('~/Desktop/response_model.csv',header = T, sep = ',')
+head(df)
+```
+
+```{r}
+dim(df)
+y = df[c('inq_ind', 'closed_funded')]
+#X = df[,2:1475]
+X=df[,2:1475]
+
+#Balance of y
+prop.table(table(y))
+```
+
+```{r}
+dim(X)
+```
+
+```{r}
+#convert str to numeric()
+
+k=NULL
+
+for (i in 1:dim(X)[2]){
+  if (sum(!is.numeric(X[,i])) > 0){
+    k = append(k,i)
+    X[,i] = as.numeric(X[,i])
+  }
+}
+k
+```
+
+```{r}
+drop_col=c('RVLR78','RVLR79','RVLR80','RVLR81','EODDATE','RVLR14','RVLR15',
+           'RVLR16','RVLR17','RVLR18','RVLR19','RVLR20','RVLR21','RVLR22',
+           'RVLR23','RVLR24','RVLR25','RVLR26','RVLR27','RVLR28','BKC201',
+           'BKC202','BKC203','BKC204','BKC205','BKC222','BKC223','BKC224',
+           'BKC225','RVL1MCTA','ALL1MCTA','RVL6MCTA','ALL6MCTA','RVL1YCTA',
+           'ALL1YCTA','BKC231','BKC232','BKC233','BKC234','BKC235','BKC252',
+           'BKC253','BKC254','BKC255')
+X[,drop_col]=list(NULL)
+
+X[X==NaN] = -1
+X[is.na(X)] = -1
+X[X==999] =-1
+#X[X<0]=NaN
+
+sum(is.na(X))
+```
+
+
+```{r}
+# drop variables missing ratio>0.8
+k=NULL
+rows = dim(X)[1]
+cols = dim(X)[2]
+
+for (i in 1:cols){
+  if (sum(X[,i] < 0)/rows > 0.8){
+    k = append(k,i)
+  }
+}
+length(k)
+```
+
+```{r}
+# remove missing ratio>0.8 variables
+
+Xremove = X
+Xremove=Xremove[,-k]
+Xremove[Xremove<0]=NaN
+
+dim(Xremove)
+dim(y)
+
+```
+
+```{r}
+Keith<- c("CV14","G960S","G232S","G238S","G990S","CV16","G240S","G241S",
+"G237S","G980S","G105S","CV15","G234S","FI09S","AT09S","FI01S","FI101S",
+"FI34S","IN09S","BC102S","FI25S","AT104S","FI24S","FI31S","FI02S","FI29S",
+"FI57S","FI12S","G102S","FI03S","AT34B","G251A","AT21S","G224A","REV54",
+"FI30S","G250A","AT31S","G250C","BKC324")
+```
+
+```{r}
+# 110 important variables obtained by Lightbgm model
+
+importantFeatures = c('US101S','CVNA','G106S','G105S','MT21S','CVMTGP',
+ 'MTAP01','CVBK','US21S','AT36S','G207S','G240S','FI21S','JT20S','CV04',
+ 'MT36S','BC102S','CV14','MT20S','G102S','CVBCP','FI20S','BR20S','AD06A',
+ 'S004S','BC21S','BALMAG01','JT21S','BR21S','AU21S','AU20S','OF25S','MT101S',
+ 'RLE906','TRV01','ALL1YAEP','RT20S','G250C','MT28S','S064A','IN20S','BR101S',
+ 'BR27S','OF20S','RE101S','RVDEXQ4','CVBCR','CV16','RLE904','G990S','MT33S',
+ 'RETS116','RE102S','RVDEXQ3','US20S','FR20S','CVHELP2','SE21S','RE36S',
+ 'S061S','RT36S','REV13','RVDEXQ2','AGG418','INDEXQ4','G241S','BR01S','US51A',
+ 'BC97B','RVDEX01','S062S','INDEX01','IN21S','G238S','AD06D','G208S','RLE905',
+ 'RVL6MAEP','BALMAG02','INAP01','RTDEXQ4','WALSHRS2','INDEXQ2','FR21S',
+ 'JT28S','WALSRVS2','RVL1YAEP','G205B','AD06C','BKC320','BR36S','RTDEX02',
+ 'RETS119','G205S','PB20S','TRV09','RVL1MAEP','RTDEX01','RVDEX02','REVS110',
+ 'AU36S','S204S','CVCP','REV225','TRV10','CV21','G305S','CV01','G208B',
+ 'RTDEXQ3')
+```
+
+```{r}
+intersect(Keith,importantFeatures)
+```
+
+```{r}
+selectFeatures = c("CV14","G960S","G232S","G238S","G990S","CV16","G240S","G241S","G237S","G980S","G105S","CV15","G234S","FI09S","AT09S","FI01S","FI101S",
+"FI34S","IN09S","BC102S","FI25S","AT104S","FI24S","FI31S","FI02S","FI29S",
+"FI57S","FI12S","G102S","FI03S","AT34B","G251A","AT21S","G224A","REV54",
+"FI30S","G250A","AT31S","G250C","BKC324",'US101S','CVNA','G106S','G105S',
+'MT21S','CVMTGP','MTAP01','CVBK','US21S','AT36S')
+```
+
+
+
+
+```{r}
+Xresponse=Xremove[,importantFeatures[1:30]]
+yresponse = as.data.frame(y[,'inq_ind'])
+```
+
+```{r}
+set.seed(123)
+
+# Random sample indexes
+train_index <- sample(1:nrow(Xresponse), 0.7 * nrow(Xresponse))
+test_index <- setdiff(1:nrow(Xresponse), train_index)
+
+# Build X_train, y_train, X_test, y_test
+X_train <- Xresponse[train_index, ]
+y_train <- yresponse[train_index,]
+
+X_test <- Xresponse[test_index, ]
+y_test <- yresponse[test_index,]
+
+train = cbind(X_train, y_train)
+train = as.data.frame(train)
+
+test = cbind(X_test, y_test)
+test = as.data.frame(test)
+
+X_train = as.data.frame(X_train)
+#y_train = as.data.frame(y_train)
+X_test = as.data.frame(X_test)
+#y_test = as.data.frame(y_test)
+
+dim(X_train)
+length(y_train)
+dim(X_test)
+length(y_test)
+```
+
+
+```{r}
+#library(DMwR)
+
+#train$y_train = as.factor(train$y_train)
+#table(y_train)
+
+#smote_train <- SMOTE(y_train ~ ., train, perc.over = 200,perc.under=150)
+#table(smote_train$y_train)
+
+#smote_X = as.data.frame(smote_train[,1:(dim(smote_train)[2]-1)])
+#smote_y = as.numeric(smote_train[,dim(smote_train)[2]])-1
+
+#dim(smote_X)
+#length(smote_y)
+```
+
+
+```{r}
+write.csv(Xremove,'Xresponsefull.csv', row.names=FALSE)
+write.csv(y,'yresponsefull.csv', row.names=FALSE)
+
+
+#write.csv(smote_X,'smote_X.csv')
+#write.csv(smote_y,'smote_y.csv')
+
+#write.csv(train,'train.csv')
+#write.csv(test,'test.csv')
+
+#write.csv(X_test,'x_test.csv')
+#write.csv(y_test,'y_test.csv')
+```
+
+
+```{r}
+## XGBBoost
+## About 3.5 hours to train.
+library(pROC)
+library(xgboost, quietly=TRUE)
+library(microbenchmark)
+
+xgb.data.train <- xgb.DMatrix(as.matrix(X_train), label = y_train)
+xgb.data.test <- xgb.DMatrix(as.matrix(X_test), label = y_test)
+
+# Get the time to train the xgboost model
+xgb.bench.speed = microbenchmark(
+	xgb.model.speed <- xgb.train(data = xgb.data.train
+		, params = list(objective = "binary:logistic"
+			, eta = 0.05
+			, max.depth = 6
+			, subsample = 1
+			, colsample_bytree = 1
+			, eval_metric = "auc"
+			, min_child_weight = 20
+			)
+		, watchlist = list(test = xgb.data.test)
+		, nrounds = 120
+		, early_stopping_rounds = 10
+		, print_every_n = 30
+		)
+    , times = 1L
+)
+
+#print(xgb.bench.speed)
+print(xgb.model.speed$bestScore)
+```
+
+```{r}
+#Get feature importance
+xgb.feature.imp = xgb.importance(model = xgb.model.speed)
+
+# Make predictions on test set for ROC curve
+xgb.test.speed = predict(xgb.model.speed
+                   , newdata = as.matrix(X_test)
+                   , ntreelimit = xgb.model.speed$bestInd)
+#auc.xgb.speed = roc(y_test, xgb.test.speed, plot = TRUE, col = "blue")
+print(auc.xgb.speed)
+```
+
+```{r}
+xgb.plot.importance(xgb.feature.imp[1:10,])
+```
+
+```{r}
+library(PRROC)
+PRROC_obj <- roc.curve(scores.class0 = xgb.test.speed, weights.class0= y_test,
+curve=TRUE)
+plot(PRROC_obj)
+```
+```{r}
+
+bst <- xgboost(data = xgb.data.train,
+               label = y_train,
+               max.depth = 6,
+               eta = .05,
+               nround = 5,
+               nthread = 1,
+               eval_metric = "auc",
+               objective = "binary:logistic"
+               )
+```
+
+
+
+```{r}
+library(xgb2sql)
+
+booster2sql(bst, output_file_name='xgb.txt')
+```
+
+```{r}
+fun_xgboost_to_sql <- function(xgbModel,output_file_name,input_table_name,unique_id){
+
+  xgb_dump <- xgboost::xgb.dump(xgbModel)
+  first_letter <- substring(xgb_dump,1,1)
+
+
+  all_tree_index <-which(first_letter == "b")
+
+
+
+
+  fun_recurse_tree <- function(g,local_dump,dump_index,branch_index,out){
+
+    if(grepl("leaf",local_dump[dump_index])==TRUE){
+      cat(as.numeric(sub(".*leaf= *(.*?)", "\\1", local_dump[dump_index])))
+    } else{
+      cur_var_name <- g$feature_names[as.numeric(regmatches(local_dump[dump_index],regexec("f(.*?)[<]",local_dump[dump_index]))[[1]][2])+1]
+      cur_var_val <- as.numeric(regmatches(local_dump[dump_index],regexec("[<](.*?)[]]",local_dump[dump_index]))[[1]][2])
+
+      # if YES
+      left_local_index <-  as.numeric(regmatches(local_dump[dump_index],regexec("yes=(.*?)[,]",local_dump[dump_index]))[[1]][2])
+      left_dump_index <- which(branch_index==left_local_index)
+
+
+
+      # if NO
+      right_local_index <-  as.numeric(regmatches(local_dump[dump_index],regexec("no=(.*?)[,]",local_dump[dump_index]))[[1]][2])
+      right_dump_index <- which(branch_index == right_local_index)
+
+
+
+      # if missing
+      missing_local_index <-  as.numeric(regmatches(local_dump[dump_index],regexec("missing=(.*?)$",local_dump[dump_index]))[[1]][2])
+      missing_dump_index <- which(branch_index == missing_local_index)
+
+
+
+      cat("\n ( CASE WHEN ",cur_var_name,"< ",cur_var_val, "THEN ")
+      cat(fun_recurse_tree(g,local_dump,left_dump_index,branch_index,""))
+      cat("\n  WHEN ",cur_var_name,">= ",cur_var_val, "THEN ")
+      cat(fun_recurse_tree(g,local_dump,right_dump_index,branch_index,""))
+      cat("\n  WHEN ",cur_var_name,"IS NULL", "THEN ")
+      cat(fun_recurse_tree(g,local_dump,missing_dump_index,branch_index,""))
+      cat(" END)")
+    }
+
+  }
+
+  sink(output_file_name,type = "output")
+
+  cat("SELECT ",unique_id,", ")
+  if(xgbModel$params$objective == "binary:logistic" | xgbModel$params$objective =="reg:logistic"){
+    p0 <- ifelse(is.null(xgbModel$params$base_score),0.5,xgbModel$params$base_score)
+    b0 <- log(p0/(1-p0))
+    cat("1/(1+exp(-(",b0,"+ SUM(tree)))) AS PRED")
+  } else if(xgbModel$params$objective == "reg:linear"){
+    b0 <- ifelse(is.null(xgbModel$params$base_score),0.5,xgbModel$params$base_score)
+    cat(b0,"+ SUM(tree) AS PRED")
+  } else if(xgbModel$params$objective == "reg:gamma" | xgbModel$params$objective == "count:poisson"){
+    mu0 <- ifelse(is.null(xgbModel$params$base_score),0.5,xgbModel$params$base_score)
+    b0 <- log(mu0)
+    cat("exp(",b0,"+ SUM(tree)) AS PRED")
+  } else if(xgbModel$params$objective == "reg:tweedie"){
+    b0 <- ifelse(is.null(xgbModel$params$base_score),0.5,xgbModel$params$base_score)
+    cat("exp(",b0,"+ SUM(tree)) AS PRED")
+  }
+
+
+  cat("\n FROM (  ")
+
+  for(tree_num in 1:length(all_tree_index)){
+    cat(paste(" \n SELECT ",unique_id, ", \n"))
+
+    tree_begin <- all_tree_index[tree_num]+1
+    if(is.na(all_tree_index[tree_num+1])){
+      tree_end <- length(xgb_dump)
+    } else {
+      tree_end <- all_tree_index[tree_num+1] - 1
+    }
+
+    all_branch_index <- as.numeric(sub("\\D*(\\d+).*", "\\1", xgb_dump))
+
+    branch_index <- all_branch_index[tree_begin:tree_end]
+    local_dump <- xgb_dump[tree_begin:tree_end]
+
+    dump_index <- 1
+
+
+    out <- ""
+    fun_recurse_tree(xgbModel,local_dump,dump_index,branch_index,out)
+    cat(" AS ", paste0("tree"))
+    if(tree_num != length(all_tree_index)){
+      cat(paste(" FROM ",input_table_name,"\n UNION ALL \n"))
+    }
+  }
+
+  cat("\n FROM ",input_table_name,") AS TREETABLE \n GROUP BY ",unique_id)
+
+  sink()
+}
+```
+
+
+
+
+```{r}
+fun_xgboost_to_sql(xgb.model.speed,"output.SQL","[hehe].[haha]","id")
+```
+
+
+
+
+
+
